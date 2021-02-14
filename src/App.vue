@@ -10,7 +10,7 @@
             >
             <div class="mt-1 relative rounded-md shadow-md">
               <input
-                v-model="ticker"
+                v-model="tickerName"
                 @keydown.enter="add"
                 type="text"
                 name="wallet"
@@ -49,6 +49,8 @@
           <div
             v-for="t of tickers"
             :key="t.name"
+            @click="selectTicker(t)"
+            :class="{ 'border-4': selected === t }"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
             <div class="px-4 py-5 sm:p-6 text-center">
@@ -61,7 +63,7 @@
             </div>
             <div class="w-full border-t border-gray-200"></div>
             <button
-              @click="remove(t)"
+              @click.stop="remove(t)"
               class="flex items-center justify-center font-medium w-full bg-gray-100 px-4 py-4 sm:px-6 text-md text-gray-500 hover:text-gray-600 hover:bg-gray-200 hover:opacity-20 transition-all focus:outline-none"
             >
               <svg
@@ -82,17 +84,23 @@
         </dl>
         <hr class="w-full border-t border-gray-600 my-4" />
       </template>
-      <section class="relative">
+      <section v-if="selected !== null" class="relative">
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-          VUE - USD
+          {{ selected.name }} - USD
         </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
-          <div class="bg-purple-800 border w-10 h-24"></div>
-          <div class="bg-purple-800 border w-10 h-32"></div>
-          <div class="bg-purple-800 border w-10 h-48"></div>
-          <div class="bg-purple-800 border w-10 h-16"></div>
+          <div
+            v-for="(bar, idx) in normalizeBars()"
+            :key="idx"
+            :style="{ height: `${bar}%` }"
+            class="bg-purple-800 border w-10"
+          ></div>
         </div>
-        <button type="button" class="absolute top-0 right-0">
+        <button
+          @click="selected = null"
+          type="button"
+          class="absolute top-0 right-0"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -121,25 +129,30 @@
 </template>
 
 <script>
+import { fetchTickerData } from './api';
+
+const WATCH_INTERVAL = 5000;
+
 export default {
   name: 'App',
   data() {
     return {
-      ticker: '',
-      tickers: [
-        { name: 'WTF', price: '-' },
-        { name: 'VUE', price: '-' },
-        { name: 'BTC', price: '-' },
-      ],
+      tickerName: '',
+      tickers: [],
+      selected: null,
+      bars: [],
     };
   },
   methods: {
     add() {
-      if (!this.ticker) return;
+      if (!this.tickerName) return;
 
-      const newTicker = this.create(this.ticker);
-      this.tickers.push(newTicker);
-      this.ticker = '';
+      this.tickers.push(this.create(this.tickerName));
+      this.tickerName = '';
+
+      const currentTicker = this.tickers[this.tickers.length - 1];
+
+      this.watchPrice(currentTicker);
     },
     create(name) {
       return {
@@ -147,8 +160,44 @@ export default {
         price: '-',
       };
     },
-    remove(deletedTicker) {
-      this.tickers = this.tickers.filter((t) => t !== deletedTicker);
+    remove(ticker) {
+      if (this.selected === ticker) {
+        this.selected = null;
+      }
+
+      this.tickers = this.tickers.filter(t => t !== ticker);
+    },
+    selectTicker(ticker) {
+      if (this.selected === ticker) return;
+
+      this.selected = ticker;
+      this.bars = [];
+    },
+    watchPrice(ticker) {
+      setInterval(async () => {
+        try {
+          const data = await fetchTickerData(ticker.name);
+          const price = data[ticker.name].USD;
+          ticker.price = this.formatPrice(price);
+
+          if (ticker === this.selected) {
+            this.bars.push(price);
+          }
+        } catch (error) {
+          console.log(error);
+        }
+      }, WATCH_INTERVAL);
+    },
+    formatPrice(price) {
+      return price > 1 ? price.toFixed(2) : price.toPrecision(2);
+    },
+    normalizeBars() {
+      const max = Math.max(...this.bars);
+      const min = Math.min(...this.bars);
+
+      return this.bars.map(bar => {
+        return max > min ? 5 + ((bar - min) * 95) / (max - min) : 5;
+      });
     },
   },
 };
