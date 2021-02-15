@@ -147,16 +147,16 @@ export default {
     add() {
       if (!this.tickerName) return;
 
-      this.tickers.push(this.create(this.tickerName));
+      this.tickers.push(this.create());
       this.tickerName = '';
 
       const currentTicker = this.tickers[this.tickers.length - 1];
 
       this.watchPrice(currentTicker);
     },
-    create(name) {
+    create() {
       return {
-        name,
+        name: this.tickerName,
         price: '-',
       };
     },
